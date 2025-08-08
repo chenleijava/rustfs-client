@@ -1,0 +1,37 @@
+services:
+  caddy:
+    image: caddy-dns:latest
+    container_name: rustfs_caddy
+    ports:
+      - "443:443"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./etc/Caddyfile:/etc/caddy/Caddyfile
+      - ./etc/caddy/config:/config
+      - ./etc/caddy/data:/data
+    networks:
+      - rustfs-network
+    restart: unless-stopped
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: rustfs_local
+    volumes:
+      - ./data:/data
+    environment:
+      - RUSTFS_ACCESS_KEY=rustfsadmin
+      - RUSTFS_SECRET_KEY=rustfsadmin
+      - RUSTFS_ADDRESS=:9000
+      - RUSTFS_CONSOLE_ENABLE=true  #启用 Web 控制台并设置端口
+      # - RUSTFS_VOLUMES=/data/rustfs{0...3} #指定数据存储路径，支持多驱动
+      # - RUSTFS_SERVER_DOMAINS=example.com  # 可选，替换为你的域名
+    restart: unless-stopped
+    depends_on:
+      - caddy
+    networks:
+      - rustfs-network
+
+networks:
+  rustfs-network:
+    driver: bridge

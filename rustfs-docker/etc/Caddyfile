@@ -1,0 +1,80 @@
+# 日志配置
+{
+    log {
+            output stdout
+            format console {
+                time_format "2006-01-02 15:04:05.000"
+                time_local
+            }
+            level info
+        }
+}
+
+
+# RustFS 代理配置片段
+(rustfs_proxy) {
+
+    # 安全头部和大文件传输优化
+    header {
+        # 安全相关头部
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        X-XSS-Protection "1; mode=block"
+        
+        # 大文件传输优化
+        # 允许分块传输和范围请求
+        Accept-Ranges bytes
+
+        # 默认缓存控制
+        header Cache-Control "public, max-age=3600"
+        
+        # 移除服务器信息
+        -Server
+    }
+
+    #rustfs 后端服务基础配置
+    reverse_proxy rustfs:9000 {
+        # 超时设置 - 针对大文件优化
+        transport http {
+            response_header_timeout 10m  # 增加响应头超时
+            read_timeout 30m            # 增加读取超时，适应大文件下载
+            write_timeout 30m           # 增加写入超时，适应大文件上传
+            dial_timeout 10s            # 连接超时
+            expect_continue_timeout 1s  # 100-continue期望超时
+        }
+        
+        # 缓冲区设置 - 针对大文件优化
+        flush_interval -1               # 立即刷新，不等待缓冲区填满
+        # 负载均衡策略
+        lb_policy first
+        # 失败重试
+        fail_duration 10s
+        max_fails 3
+        unhealthy_status 5xx
+    }
+
+    # 错误处理
+    handle_errors {
+        respond "{http.error.status_code} {http.error.status_text}" {http.error.status_code}
+    }
+
+    # 压缩设置
+    encode gzip zstd
+}
+
+
+# RustFS 对象存储
+cdn.juchuangjiapin.dpdns.org {
+
+    # TLS配置
+    tls {
+        dns cloudflare 3pUssRWr1nUVMjREfdSM93nrGgr6CLkb98KTeTbW
+        protocols tls1.2 tls1.3
+    }
+
+    # 导入主代理配置
+    import rustfs_proxy
+
+}
